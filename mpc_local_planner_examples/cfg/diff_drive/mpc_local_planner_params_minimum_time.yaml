@@ -26,11 +26,12 @@ MpcLocalPlannerROS:
     cutoff_dist: 2.5 
     include_costmap_obstacles: True
     costmap_obstacles_behind_robot_dist: 1.5
+    collision_check_no_poses: 5
 
   ## Planning grid 
   grid:
     type: "fd_grid"
-    grid_size_ref: 20
+    grid_size_ref: 30
     dt_ref: 0.3
     xf_fixed: [True, True, True]
     warm_start: True
@@ -70,7 +71,7 @@ MpcLocalPlannerROS:
 
   ## Controller options
   controller:
-    outer_ocp_iterations: 5
+    outer_ocp_iterations: 1
     xy_goal_tolerance: 0.2
     yaw_goal_tolerance: 0.1
     global_plan_overwrite_orientation: true
@@ -83,6 +84,7 @@ MpcLocalPlannerROS:
     force_reinit_num_steps: 0
     prefer_x_feedback: False
     publish_ocp_results: False
+    print_cpu_time: True
     
   ## Solver settings
   solver:

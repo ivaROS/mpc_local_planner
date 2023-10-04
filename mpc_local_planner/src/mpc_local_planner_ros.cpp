@@ -46,9 +46,7 @@ MpcLocalPlannerROS::MpcLocalPlannerROS()
       _tf(nullptr),
       _costmap_model(nullptr),
       _costmap_converter_loader("costmap_converter", "costmap_converter::BaseCostmapToPolygons"),
-      dynamic_controller_recfg_(NULL),
-      dynamic_collision_recfg_(NULL),
-      dynamic_footprint_recfg_(NULL),
+      /*dynamic_recfg_(NULL),*/
       _goal_reached(false),
       _no_infeasible_plans(0),
       /*last_preferred_rotdir_(RotType::none),*/
@@ -58,34 +56,12 @@ MpcLocalPlannerROS::MpcLocalPlannerROS()
 
 MpcLocalPlannerROS::~MpcLocalPlannerROS() {}
 
-void MpcLocalPlannerROS::reconfigureControllerCB(ControllerReconfigureConfig& config, uint32_t level)
+/*
+void MpcLocalPlannerROS::reconfigureCB(TebLocalPlannerReconfigureConfig& config, uint32_t level)
 {
-    boost::mutex::scoped_lock l(config_mutex_);
-
-    _params.xy_goal_tolerance                      = config.xy_goal_tolerance;
-    _params.yaw_goal_tolerance                     = config.yaw_goal_tolerance;
-    _params.global_plan_overwrite_orientation      = config.global_plan_overwrite_orientation;
-    _params.global_plan_prune_distance             = config.global_plan_prune_distance;
-    _params.max_global_plan_lookahead_dist         = config.max_global_plan_lookahead_dist;
-    _params.global_plan_viapoint_sep               = config.global_plan_viapoint_sep;
+  cfg_.reconfigure(config);
 }
-
-void MpcLocalPlannerROS::reconfigureFootprintCB(FootprintReconfigureConfig& config, uint32_t level)
-{
-    boost::mutex::scoped_lock l(config_mutex_);
-
-    _params.is_footprint_dynamic                   = config.is_footprint_dynamic;
-}
-
-void MpcLocalPlannerROS::reconfigureCollisionCB(CollisionReconfigureConfig& config, uint32_t level)
-{
-    boost::mutex::scoped_lock l(config_mutex_);
-
-    _params.include_costmap_obstacles              = config.include_costmap_obstacles;
-    _params.costmap_obstacles_behind_robot_dist    = config.costmap_obstacles_behind_robot_dist;
-    _params.collision_check_min_resolution_angular = config.collision_check_min_resolution_angular;
-    _params.collision_check_no_poses               = config.collision_check_no_poses;
-}
+*/
 
 void MpcLocalPlannerROS::initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros)
 {
@@ -107,9 +83,7 @@ void MpcLocalPlannerROS::initialize(std::string name, tf2_ros::Buffer* tf, costm
 
         // special parameters
         nh.param("odom_topic", _params.odom_topic, _params.odom_topic);
-
         nh.param("footprint_model/is_footprint_dynamic", _params.is_footprint_dynamic, _params.is_footprint_dynamic);
-
         nh.param("collision_avoidance/include_costmap_obstacles", _params.include_costmap_obstacles, _params.include_costmap_obstacles);
         nh.param("collision_avoidance/costmap_obstacles_behind_robot_dist", _params.costmap_obstacles_behind_robot_dist,
                  _params.costmap_obstacles_behind_robot_dist);
@@ -187,23 +161,12 @@ void MpcLocalPlannerROS::initialize(std::string name, tf2_ros::Buffer* tf, costm
         _odom_helper.setOdomTopic(_params.odom_topic);
 
         // setup dynamic reconfigure
-        ros::NodeHandle controller_nh(nh, "controller");
-        dynamic_controller_recfg_ = boost::make_shared<dynamic_reconfigure::Server<ControllerReconfigureConfig>>(controller_nh);
-        dynamic_reconfigure::Server<ControllerReconfigureConfig>::CallbackType controller_cb =
-            boost::bind(&MpcLocalPlannerROS::reconfigureControllerCB, this, _1, _2);
-        dynamic_controller_recfg_->setCallback(controller_cb);
-
-        ros::NodeHandle collision_nh(nh, "collision");
-        dynamic_collision_recfg_ = boost::make_shared<dynamic_reconfigure::Server<CollisionReconfigureConfig>>(collision_nh);
-        dynamic_reconfigure::Server<CollisionReconfigureConfig>::CallbackType collision_cb =
-            boost::bind(&MpcLocalPlannerROS::reconfigureCollisionCB, this, _1, _2);
-        dynamic_collision_recfg_->setCallback(collision_cb);
-
-        ros::NodeHandle footprint_nh(nh, "footprint_model");
-        dynamic_footprint_recfg_ = boost::make_shared<dynamic_reconfigure::Server<FootprintReconfigureConfig>>(footprint_nh);
-        dynamic_reconfigure::Server<FootprintReconfigureConfig>::CallbackType footprint_cb =
-            boost::bind(&MpcLocalPlannerROS::reconfigureFootprintCB, this, _1, _2);
-        dynamic_footprint_recfg_->setCallback(footprint_cb);
+        /*
+        dynamic_recfg_ = boost::make_shared<dynamic_reconfigure::Server<MpcLocalPlannerReconfigureConfig>>(nh);
+        dynamic_reconfigure::Server<MpcLocalPlannerReconfigureConfig>::CallbackType cb =
+            boost::bind(&MpcLocalPlanner::reconfigureCB, this, _1, _2);
+        dynamic_recfg_->setCallback(cb);
+        */
 
         // validate optimization footprint and costmap footprint
         validateFootprints(_robot_model->getInscribedRadius(), _robot_inscribed_radius, _controller.getInequalityConstraint()->getMinimumDistance());
@@ -217,6 +180,9 @@ void MpcLocalPlannerROS::initialize(std::string name, tf2_ros::Buffer* tf, costm
         // additional move base params
         ros::NodeHandle nh_move_base("~");
         nh_move_base.param("controller_frequency", _params.controller_frequency, _params.controller_frequency);
+
+        _total_time = 0;
+        _loop_num = 0;
 
         // set initialized flag
         _initialized = true;
@@ -253,11 +219,18 @@ bool MpcLocalPlannerROS::setPlan(const std::vector<geometry_msgs::PoseStamped>& 
 
 bool MpcLocalPlannerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_vel)
 {
+    ros::WallTime start = ros::WallTime::now();
     std::string dummy_message;
     geometry_msgs::PoseStamped dummy_pose;
     geometry_msgs::TwistStamped dummy_velocity, cmd_vel_stamped;
     uint32_t outcome = computeVelocityCommands(dummy_pose, dummy_velocity, cmd_vel_stamped, dummy_message);
     cmd_vel          = cmd_vel_stamped.twist;
+    ros::WallDuration elapsed = ros::WallTime::now() - start;
+    float time_elapsed = float(elapsed.toNSec())/1000000;
+    _total_time += time_elapsed;
+    _loop_num += 1;
+    float avg_time = _total_time / _loop_num;
+    ROS_INFO_STREAM("MPC local planning time: " << time_elapsed << " ms, Avg time: " << avg_time << " ms.");
     return outcome == mbf_msgs::ExePathResult::SUCCESS;
 }
 
@@ -369,7 +342,8 @@ uint32_t MpcLocalPlannerROS::computeVelocityCommands(const geometry_msgs::PoseSt
     // updateControlFromTwist()
 
     // Do not allow config changes during the following optimization step
-    boost::mutex::scoped_lock cfg_lock(configMutex());
+    // TODO(roesmann): we need something similar in case we allow dynamic reconfiguration:
+    // boost::mutex::scoped_lock cfg_lock(cfg_.configMutex());
 
     // Now perform the actual planning
     // bool success = planner_->plan(transformed_plan, &robot_vel_, cfg_.goal_tolerance.free_goal_vel);
@@ -466,6 +440,8 @@ bool MpcLocalPlannerROS::isGoalReached()
     {
         ROS_INFO("GOAL Reached!");
         // planner_->clearPlanner();
+        _total_time = 0;
+        _loop_num = 0;
         return true;
     }
     return false;

@@ -52,9 +52,14 @@ MpcLocalPlannerROS:
     objective:
       type: "quadratic_form" # minimum_time requires grid/variable_grid/enable=True and grid/xf_fixed set properly
       quadratic_form:
-        state_weights: [1.8, 1.8, 0.25]
+        state_weights: [0, 0, 0]
         control_weights: [2, 2]
         integral_form: False
+        hybrid_cost_minimum_time: True
+      minimum_time_via_points:
+        position_weight: 10.5
+        orientation_weight: 0.0
+        via_points_ordered: False
     terminal_cost:
       type: "quadratic" # can be "none"
       quadratic:
@@ -73,9 +78,9 @@ MpcLocalPlannerROS:
     global_plan_overwrite_orientation: true
     global_plan_prune_distance: 1.0
     allow_init_with_backward_motion: True
-    max_global_plan_lookahead_dist: 1.5 # Check horizon length
+    max_global_plan_lookahead_dist: 1.5 
     global_plan_viapoint_sep: 5.5
-    force_reinit_new_goal_dist: 1.0 
+    force_reinit_new_goal_dist: 1.0
     force_reinit_new_goal_angular: 1.57
     force_reinit_num_steps: 0
     prefer_x_feedback: False

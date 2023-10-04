@@ -58,10 +58,8 @@
 #include <costmap_converter/costmap_converter_interface.h>
 
 // dynamic reconfigure
-#include <dynamic_reconfigure/server.h>
-#include <mpc_local_planner/ControllerReconfigureConfig.h>
-#include <mpc_local_planner/CollisionReconfigureConfig.h>
-#include <mpc_local_planner/FootprintReconfigureConfig.h>
+// #include <dynamic_reconfigure/server.h>
+// #include <mpc_local_planner/MpcLocalPlannerReconfigureConfig.h>
 
 #include <boost/shared_ptr.hpp>
 
@@ -223,11 +221,6 @@ class MpcLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costmap
      */
     static double getNumberFromXMLRPC(XmlRpc::XmlRpcValue& value, const std::string& full_param_name);
 
-    /**
-     * @brief Return the internal config mutex
-     */
-    boost::mutex& configMutex() { return config_mutex_; }
-
     //@}
 
  protected:
@@ -265,31 +258,13 @@ class MpcLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costmap
     void updateViaPointsContainer(const std::vector<geometry_msgs::PoseStamped>& transformed_plan, double min_separation);
 
     /**
-     * @brief Callback for the dynamic_reconfigure controller node.
+     * @brief Callback for the dynamic_reconfigure node.
      *
      * This callback allows to modify parameters dynamically at runtime without restarting the node
      * @param config Reference to the dynamic reconfigure config
      * @param level Dynamic reconfigure level
      */
-    void reconfigureControllerCB(ControllerReconfigureConfig& config, uint32_t level);
-
-    /**
-     * @brief Callback for the dynamic_reconfigure collision node.
-     *
-     * This callback allows to modify parameters dynamically at runtime without restarting the node
-     * @param config Reference to the dynamic reconfigure config
-     * @param level Dynamic reconfigure level
-     */
-    void reconfigureCollisionCB(CollisionReconfigureConfig& config, uint32_t level);
-
-    /**
-     * @brief Callback for the dynamic_reconfigure footprint collision node.
-     *
-     * This callback allows to modify parameters dynamically at runtime without restarting the node
-     * @param config Reference to the dynamic reconfigure config
-     * @param level Dynamic reconfigure level
-     */
-    void reconfigureFootprintCB(FootprintReconfigureConfig& config, uint32_t level);
+    // void reconfigureCB(MpcLocalPlannerReconfigureConfig& config, uint32_t level);
 
     /**
      * @brief Callback for custom obstacles that are not obtained from the costmap
@@ -398,12 +373,8 @@ class MpcLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costmap
     pluginlib::ClassLoader<costmap_converter::BaseCostmapToPolygons> _costmap_converter_loader;  //!< Load costmap converter plugins at runtime
     boost::shared_ptr<costmap_converter::BaseCostmapToPolygons> _costmap_converter;              //!< Store the current costmap_converter
 
-    boost::shared_ptr<dynamic_reconfigure::Server<ControllerReconfigureConfig>>
-        dynamic_controller_recfg_;                             //!< Dynamic reconfigure server to allow config modifications at runtime
-    boost::shared_ptr<dynamic_reconfigure::Server<CollisionReconfigureConfig>>
-        dynamic_collision_recfg_;                              //!< Dynamic reconfigure server to allow config modifications at runtime
-    boost::shared_ptr<dynamic_reconfigure::Server<FootprintReconfigureConfig>>
-        dynamic_footprint_recfg_;                              //!< Dynamic reconfigure server to allow config modifications at runtime
+    // std::shared_ptr<dynamic_reconfigure::Server<MpcLocalPlannerReconfigureConfig>>
+    //    dynamic_recfg_;                                        //!< Dynamic reconfigure server to allow config modifications at runtime
     ros::Subscriber _custom_obst_sub;                          //!< Subscriber for custom obstacles received via a ObstacleMsg.
     std::mutex _custom_obst_mutex;                             //!< Mutex that locks the obstacle array (multi-threaded)
     costmap_converter::ObstacleArrayMsg _custom_obstacle_msg;  //!< Copy of the most recent obstacle message
@@ -421,6 +392,9 @@ class MpcLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costmap
     int _no_infeasible_plans = 0;          //!< Store how many times in a row the planner failed to find a feasible plan.
     geometry_msgs::Twist _last_cmd;        //!< Store the last control command generated in computeVelocityCommands()
     ros::Time _time_last_cmd;
+
+    float _total_time;
+    int _loop_num;
 
     RobotFootprintModelPtr _robot_model;
 
@@ -451,8 +425,6 @@ class MpcLocalPlannerROS : public nav_core::BaseLocalPlanner, public mbf_costmap
         double controller_frequency                   = 10;
 
     } _params;
-
-    boost::mutex config_mutex_;  //!< Mutex for config accesses and changes
 
     struct CostmapConverterPlugin
     {
